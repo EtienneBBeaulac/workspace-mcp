@@ -1,0 +1,29 @@
+{
+  "name": "@zillow/workspace-mcp",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Multi-workspace filesystem MCP server for cross-platform development",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "workspace-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "test": "node --test || echo 'No tests yet'"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.2.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
