@@ -2,3 +2,8 @@ node_modules/
 dist/
 *.log
 .DS_Store
+.idea/
+.memory/
+
+# Local workspace config (contains machine-specific paths)
+workspace-config.json

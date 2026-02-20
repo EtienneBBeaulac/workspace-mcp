@@ -14,14 +14,15 @@ AI coding agents are normally confined to a single workspace. When developing cr
 ## Tools Provided
 
 ### `workspace_read`
-Read a file from a workspace.
+Read a file from a workspace. Returns up to 500 lines by default with line numbers and metadata (`totalLines`, `startLine`, `endLine`, `truncated`). Use `offset`/`limit` to paginate.
 
 ```typescript
 workspace_read(workspace: "ios", path: "Modules/Messaging/Sources/MessagingCoordinator/StreamState.swift")
+workspace_read(workspace: "ios", path: "Modules/.../LargeFile.swift", offset: 100, limit: 50)
 ```
 
 ### `workspace_write`
-Write a file to a workspace (only to allowed paths).
+Write a file to a workspace. Only writes to paths matching the workspace write allowlist (defined in `workspace-config.json`).
 
 ```typescript
 workspace_write(
@@ -31,55 +32,70 @@ workspace_write(
 )
 ```
 
-Allowed paths (iOS):
-- `Modules/**/*.swift`
-- `Tests/**/*.swift`
-- `Apps/**/*.swift`
-- `Examples/**/*.swift`
-
 ### `workspace_list`
-List directory contents.
+List directory contents with metadata (type, size, modified date). Supports recursive tree listing.
 
 ```typescript
 workspace_list(workspace: "ios", path: "Modules/Messaging/Sources")
+workspace_list(workspace: "ios", path: "Modules", recursive: true, maxDepth: 2)
 ```
 
 ### `workspace_search`
-Search for text/regex in workspace files using ripgrep.
+Search for text/regex in workspace files using ripgrep. Supports output modes (`content`, `files`, `count`), context lines, path scoping (directory or file), and pagination.
 
 ```typescript
 workspace_search(workspace: "ios", pattern: "FlowCoordinator", glob: "**/*.swift")
+workspace_search(workspace: "ios", pattern: "class.*Coordinator", path: "Modules/Messaging", outputMode: "files")
 ```
 
 ### `workspace_edit`
-Edit a file using search and replace (like Firebender's edit tool, but for any workspace).
+Edit one or more files using search and replace. Supports regex with backreferences.
 
 ```typescript
+// Single file
 workspace_edit(
   workspace: "ios",
-  path: "Modules/.../MyFile.swift",
+  paths: "Modules/.../MyFile.swift",
   oldString: "func oldName()",
   newString: "func newName()",
-  replaceAll: false  // true to replace all occurrences
+)
+
+// Multiple files (same replacement applied to all)
+workspace_edit(
+  workspace: "ios",
+  paths: ["FileA.swift", "FileB.swift", "FileC.swift"],
+  oldString: "oldValue",
+  newString: "newValue",
+  replaceAll: true,
+)
+
+// Regex with backreferences
+workspace_edit(
+  workspace: "ios",
+  paths: "Modules/.../MyFile.swift",
+  oldString: "func (\\w+)\\(param: String\\)",
+  newString: "func $1(param: Int)",
+  useRegex: true,
 )
 ```
 
-### `workspace_check_swift`
-Validate Swift syntax using `swiftc -typecheck`. Gracefully fails if Swift toolchain unavailable.
+### `workspace_check`
+Syntax-check source files. Auto-detects language from file extension (Swift, TypeScript, Python, Go, Kotlin, Rust). When checking multiple files of the same language, compiles them together to resolve cross-file references.
 
 ```typescript
-workspace_check_swift(workspace: "ios", path: "Modules/.../MyFile.swift")
+workspace_check(workspace: "ios", paths: "Modules/.../MyFile.swift")
+workspace_check(workspace: "ios", paths: ["Modules/.../FileA.swift", "Modules/.../FileB.swift"])
 ```
 
 ### `workspace_run_tests`
-Run Swift tests using `swift test` (for SPM projects). Note: Tuist/Xcode projects need xcodebuild.
+Run tests in the workspace. Auto-detects build system (Tuist -> xcodebuild -> swift test).
 
 ```typescript
 workspace_run_tests(workspace: "ios", testTarget: "MessagingTests")
 ```
 
 ### `workspace_build`
-Build Swift module using `swift build` (for SPM projects).
+Build the workspace. Auto-detects build system (Tuist -> xcodebuild -> swift build).
 
 ```typescript
 workspace_build(workspace: "ios", buildTarget: "MessagingCoordinator")
@@ -87,10 +103,26 @@ workspace_build(workspace: "ios", buildTarget: "MessagingCoordinator")
 
 ## Configuration
 
-### Available Workspaces
+Create a `workspace-config.json` in the repo root (see `workspace-config.example.json`):
 
-Currently configured (see `src/config.ts`):
-- **ios**: `/Users/etienneb/git/zillow/ZillowMap` (ZillowMap iOS repo)
+```json
+{
+  "workspaces": {
+    "ios": {
+      "root": "$HOME/git/zillow/ZillowMap",
+      "name": "iOS (ZillowMap)",
+      "writeAllowlist": [
+        "Modules/**/*.swift",
+        "Tests/**/*.swift",
+        "Apps/**/*.swift",
+        "Examples/**/*.swift"
+      ]
+    }
+  }
+}
+```
+
+Supports `$HOME` and `~` expansion in `root` paths. There are no hardcoded defaults — all workspaces must be defined in this file. If missing, the server starts with zero workspaces and logs instructions.
 
 ### Firebender Registration
 
@@ -101,7 +133,7 @@ Added to `~/.firebender/firebender.json`:
   "mcpServers": {
     "workspace": {
       "command": "node",
-      "args": ["/Users/etienneb/git/zillow/mcp/packages/workspace-mcp/dist/index.js"]
+      "args": ["<path-to-workspace-mcp>/dist/index.js"]
     }
   }
 }
@@ -113,30 +145,30 @@ Added to `~/.firebender/firebender.json`:
 2. Agent reads iOS conventions: `workspace_read("ios", "Modules/Messaging/Sources/MessagingCoordinator/SubjectCoordinator.swift")`
 3. Agent references Rosetta mapping: (read `.firebender/rosetta-kotlin-swift.md` in Android workspace)
 4. Agent generates Swift equivalent
-5. Agent validates: `workspace_check_swift("ios", "Modules/.../KeyReducer.swift")`
+5. Agent validates: `workspace_check("ios", "Modules/.../KeyReducer.swift")`
 6. Agent writes: `workspace_write("ios", "Modules/.../KeyReducer.swift", content)`
 
 All in one session, no context loss.
 
-## Companion Files
+## Companion Projects
 
+- **Memory MCP**: [`memory-mcp`](../memory-mcp) — persistent codebase knowledge for AI agents (separate repo)
 - **Rosetta rules**: `.firebender/rosetta-kotlin-swift.md` in Android workspace — idiom mapping reference
-- **Design doc**: `ideas/cross-platform-agent-bridge-design-thinking.md` — full design thinking process
 
 ## Development
 
 ```bash
-# Install dependencies (from monorepo root)
+# Install dependencies
 npm install
 
 # Build
-cd packages/workspace-mcp
 npm run build
 
 # Run in dev mode
 npm run dev
 
-# Test the server (starts and listens on stdio)
+# Run tests
+npm test
 ```
 
 ## Safety Features
@@ -162,14 +194,14 @@ The MCP uses **stateless validation** instead of session tracking - no brittle s
 - Self-documenting (failures explain what's wrong)
 
 ### Other Safety Features
-- **Write allowlist**: Only allows writes to Swift files in Modules/Tests/Apps/Examples
-- **Path validation**: Prevents `..` escapes
+- **Write allowlist**: Only allows writes to paths matching the configured allowlist patterns
+- **Path validation**: Resolved paths are verified to stay within workspace root (prevents directory traversal)
+- **Shell injection prevention**: All external commands use `execFile` with argument arrays (no shell interpolation)
 - **Audit logging**: All write/edit operations logged to stderr
-- **Graceful degradation**: Swift validation is optional (works without Xcode toolchain)
+- **Graceful degradation**: Syntax checking is optional (works without language toolchains)
 
-## Future Enhancements (v2)
+## Future Enhancements
 
-- Configurable workspace roots via `workspace-config.json`
 - Git operations (`workspace_git`)
 - Additional workspaces (backend repos, etc.)
 - Auto-context loading (inject `.firebender/platform-context.md` on first access)

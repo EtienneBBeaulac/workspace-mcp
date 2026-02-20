@@ -9,14 +9,22 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { z } from 'zod';
+import { z, ZodError } from 'zod';
 import { LocalFilesystemWorkspace } from './local-filesystem-workspace.js';
-import { getWorkspaceConfig, WORKSPACES } from './config.js';
+import { WORKSPACES } from './config.js';
 import type { Workspace } from './workspace.js';
 
 class WorkspaceMCPServer {
   private readonly server: Server;
   private readonly workspaces: Map<string, Workspace>;
+
+  /** Dynamic description helper — includes configured workspace names so the agent knows what's available */
+  private workspaceDescription(): string {
+    const names = Array.from(this.workspaces.keys());
+    return names.length > 0
+      ? `Workspace name. Available: ${names.map(n => `"${n}"`).join(', ')}`
+      : 'Workspace name (none configured — create a workspace-config.json)';
+  }
 
   constructor() {
     this.workspaces = new Map();
@@ -46,18 +54,18 @@ class WorkspaceMCPServer {
       tools: [
         {
           name: 'workspace_read',
-          description: 'Read a file from a workspace with optional pagination. Returns line-numbered content by default (cat -n format). With offset/limit, returns plain text for editing.',
+          description: 'Read a file from a workspace. Returns up to 500 lines by default (use offset/limit to paginate). Response includes line numbers and metadata (totalLines, range, truncated).',
           inputSchema: {
             type: 'object',
             properties: {
               workspace: {
                 type: 'string',
-                description: 'Workspace name (e.g., "ios")',
+                description: this.workspaceDescription(),
                 enum: Array.from(this.workspaces.keys()),
               },
               path: {
                 type: 'string',
-                description: 'File path relative to workspace root',
+                description: 'File path relative to workspace root (e.g., "Modules/MyModule/File.swift")',
               },
               offset: {
                 type: 'number',
@@ -73,13 +81,13 @@ class WorkspaceMCPServer {
         },
         {
           name: 'workspace_write',
-          description: 'Write a file to a workspace (e.g., iOS repo). Only writes to allowed paths (*.swift in Modules/Tests/Apps/Examples). Logs all writes.',
+          description: 'Write a file to a workspace. Only writes to paths matching the workspace write allowlist (defined in workspace-config.json). Logs all writes.',
           inputSchema: {
             type: 'object',
             properties: {
               workspace: {
                 type: 'string',
-                description: 'Workspace name (e.g., "ios")',
+                description: this.workspaceDescription(),
                 enum: Array.from(this.workspaces.keys()),
               },
               path: {
@@ -96,34 +104,42 @@ class WorkspaceMCPServer {
         },
         {
           name: 'workspace_edit',
-          description: 'Edit a file in a workspace using search and replace. The oldString must be unique in the file unless replaceAll is true. Respects write allowlist.',
+          description: 'Edit one or more files in a workspace using search and replace. Same find/replace operation applied to all specified files. The oldString must be unique per file unless replaceAll is true. Respects write allowlist. When useRegex=true, newString supports regex backreferences ($1, $2, etc.).',
           inputSchema: {
             type: 'object',
             properties: {
               workspace: {
                 type: 'string',
-                description: 'Workspace name (e.g., "ios")',
+                description: this.workspaceDescription(),
                 enum: Array.from(this.workspaces.keys()),
               },
-              path: {
-                type: 'string',
-                description: 'File path relative to workspace root',
+              paths: {
+                oneOf: [
+                  { type: 'string' },
+                  { type: 'array', items: { type: 'string' } },
+                ],
+                description: 'Single file path or array of file paths relative to workspace root',
               },
               oldString: {
                 type: 'string',
-                description: 'String to find and replace (must be unique unless replaceAll=true)',
+                description: 'String to find and replace (must be unique in each file unless replaceAll=true)',
               },
               newString: {
                 type: 'string',
-                description: 'String to replace with',
+                description: 'Replacement string. When useRegex=true, supports $1/$2 backreferences for capture groups.',
               },
               replaceAll: {
                 type: 'boolean',
-                description: 'Replace all occurrences (default: false, requires uniqueness)',
+                description: 'Replace all occurrences in each file (default: false, requires uniqueness)',
+                default: false,
+              },
+              useRegex: {
+                type: 'boolean',
+                description: 'Treat oldString as a regex pattern (default: false). Enables $1/$2 backreferences in newString.',
                 default: false,
               },
             },
-            required: ['workspace', 'path', 'oldString', 'newString'],
+            required: ['workspace', 'paths', 'oldString', 'newString'],
           },
         },
         {
@@ -134,12 +150,12 @@ class WorkspaceMCPServer {
             properties: {
               workspace: {
                 type: 'string',
-                description: 'Workspace name (e.g., "ios")',
+                description: this.workspaceDescription(),
                 enum: Array.from(this.workspaces.keys()),
               },
               path: {
                 type: 'string',
-                description: 'Directory path relative to workspace root (empty string for root)',
+                description: 'Directory path relative to workspace root. Omit or use "." to list the root.',
                 default: '',
               },
               recursive: {
@@ -157,22 +173,26 @@ class WorkspaceMCPServer {
         },
         {
           name: 'workspace_search',
-          description: 'Search for text/regex using ripgrep with output modes, context lines, case-insensitive option, and pagination.',
+          description: 'Search for text/regex using ripgrep with output modes, context lines, case-insensitive option, and pagination. When using contextLines, results include contextBefore/contextAfter arrays.',
           inputSchema: {
             type: 'object',
             properties: {
               workspace: {
                 type: 'string',
-                description: 'Workspace name (e.g., "ios")',
+                description: this.workspaceDescription(),
                 enum: Array.from(this.workspaces.keys()),
               },
               pattern: {
                 type: 'string',
                 description: 'Search pattern (regex or text)',
               },
+              path: {
+                type: 'string',
+                description: 'Optional path relative to workspace root to scope the search. Can be a directory (e.g., "Modules/Messaging/Sources") or a single file (e.g., "Modules/.../File.swift").',
+              },
               glob: {
                 type: 'string',
-                description: 'Optional glob pattern to filter files (e.g., "**/*.swift")',
+                description: 'Optional glob pattern to filter files by name/extension (e.g., "**/*.swift")',
               },
               outputMode: {
                 type: 'string',
@@ -202,33 +222,36 @@ class WorkspaceMCPServer {
           },
         },
         {
-          name: 'workspace_check_swift',
-          description: 'Validate Swift file syntax using swiftc -typecheck. Requires Xcode Command Line Tools. Gracefully fails if swiftc unavailable.',
+          name: 'workspace_check',
+          description: 'Syntax-check one or more source files. Auto-detects language from file extension (Swift, TypeScript, Python, Go, Kotlin, Rust). When checking multiple files of the same language (Swift, TypeScript, Go), compiles them together to resolve cross-file references. For full project validation with framework imports, use workspace_build.',
           inputSchema: {
             type: 'object',
             properties: {
               workspace: {
                 type: 'string',
-                description: 'Workspace name (e.g., "ios")',
+                description: this.workspaceDescription(),
                 enum: Array.from(this.workspaces.keys()),
               },
-              path: {
-                type: 'string',
-                description: 'Swift file path relative to workspace root',
+              paths: {
+                oneOf: [
+                  { type: 'string' },
+                  { type: 'array', items: { type: 'string' } },
+                ],
+                description: 'Single file path or array of file paths relative to workspace root',
               },
             },
-            required: ['workspace', 'path'],
+            required: ['workspace', 'paths'],
           },
         },
         {
           name: 'workspace_run_tests',
-          description: 'Run Swift tests in the workspace using swift test. Returns pass/fail counts and failure details.',
+          description: 'Run tests in the workspace. Auto-detects build system and falls back gracefully (Tuist → xcodebuild → swift test). Returns pass/fail counts and failure details.',
           inputSchema: {
             type: 'object',
             properties: {
               workspace: {
                 type: 'string',
-                description: 'Workspace name (e.g., "ios")',
+                description: this.workspaceDescription(),
                 enum: Array.from(this.workspaces.keys()),
               },
               testTarget: {
@@ -241,13 +264,13 @@ class WorkspaceMCPServer {
         },
         {
           name: 'workspace_build',
-          description: 'Build the Swift module using swift build. Returns build success/failure with errors.',
+          description: 'Build the workspace. Auto-detects build system and falls back gracefully (Tuist → xcodebuild → swift build). This is the recommended way to validate project code.',
           inputSchema: {
             type: 'object',
             properties: {
               workspace: {
                 type: 'string',
-                description: 'Workspace name (e.g., "ios")',
+                description: this.workspaceDescription(),
                 enum: Array.from(this.workspaces.keys()),
               },
               buildTarget: {
@@ -267,7 +290,7 @@ class WorkspaceMCPServer {
       try {
         switch (name) {
           case 'workspace_read': {
-            const { workspace, path: filePath, offset, limit } = z
+            const { workspace, path: filePath, ...readOptions } = z
               .object({
                 workspace: z.string(),
                 path: z.string(),
@@ -277,13 +300,17 @@ class WorkspaceMCPServer {
               .parse(args);
 
             const ws = this.getWorkspace(workspace);
-            const content = await ws.read(filePath, offset, limit);
+            const result = await ws.read(filePath, readOptions);
+
+            const header = result.truncated
+              ? `[${filePath}] Lines ${result.startLine}-${result.endLine} of ${result.totalLines} (truncated — use offset/limit to read more)`
+              : `[${filePath}] Lines ${result.startLine}-${result.endLine} of ${result.totalLines}`;
 
             return {
               content: [
                 {
                   type: 'text',
-                  text: content,
+                  text: `${header}\n${result.content}`,
                 },
               ],
             };
@@ -312,10 +339,10 @@ class WorkspaceMCPServer {
           }
 
           case 'workspace_edit': {
-            const { workspace, path: filePath, oldString, newString, replaceAll, useRegex } = z
+            const { workspace, paths, oldString, newString, ...editOptions } = z
               .object({
                 workspace: z.string(),
-                path: z.string(),
+                paths: z.union([z.string(), z.array(z.string())]),
                 oldString: z.string(),
                 newString: z.string(),
                 replaceAll: z.boolean().optional().default(false),
@@ -324,7 +351,7 @@ class WorkspaceMCPServer {
               .parse(args);
 
             const ws = this.getWorkspace(workspace);
-            const result = await ws.edit(filePath, oldString, newString, replaceAll, useRegex);
+            const result = await ws.edit(paths, oldString, newString, editOptions);
 
             return {
               content: [
@@ -337,17 +364,17 @@ class WorkspaceMCPServer {
           }
 
           case 'workspace_list': {
-            const { workspace, path: dirPath = '', recursive, maxDepth } = z
+            const { workspace, ...listOptions } = z
               .object({
                 workspace: z.string(),
-                path: z.string().optional().default(''),
-                recursive: z.boolean().optional().default(false),
+                path: z.string().optional(),
+                recursive: z.boolean().optional(),
                 maxDepth: z.number().optional(),
               })
               .parse(args);
 
             const ws = this.getWorkspace(workspace);
-            const entries = await ws.list(dirPath, recursive, maxDepth);
+            const entries = await ws.list(listOptions);
 
             return {
               content: [
@@ -360,21 +387,22 @@ class WorkspaceMCPServer {
           }
 
           case 'workspace_search': {
-            const { workspace, pattern, glob, outputMode, contextLines, caseInsensitive, limit, offset } = z
+            const { workspace, pattern, ...searchOptions } = z
               .object({
                 workspace: z.string(),
                 pattern: z.string(),
+                path: z.string().optional(),
                 glob: z.string().optional(),
-                outputMode: z.enum(['content', 'files', 'count']).optional().default('content'),
+                outputMode: z.enum(['content', 'files', 'count']).optional(),
                 contextLines: z.number().optional(),
-                caseInsensitive: z.boolean().optional().default(false),
+                caseInsensitive: z.boolean().optional(),
                 limit: z.number().optional(),
                 offset: z.number().optional(),
               })
               .parse(args);
 
             const ws = this.getWorkspace(workspace);
-            const results = await ws.search(pattern, glob, outputMode, contextLines, caseInsensitive, limit, offset);
+            const results = await ws.search(pattern, searchOptions);
 
             return {
               content: [
@@ -383,9 +411,7 @@ class WorkspaceMCPServer {
                   text: JSON.stringify(
                     {
                       pattern,
-                      glob,
-                      outputMode,
-                      caseInsensitive,
+                      ...searchOptions,
                       matchCount: results.length,
                       matches: results,
                     },
@@ -397,16 +423,16 @@ class WorkspaceMCPServer {
             };
           }
 
-          case 'workspace_check_swift': {
-            const { workspace, path: filePath } = z
+          case 'workspace_check': {
+            const { workspace, paths } = z
               .object({
                 workspace: z.string(),
-                path: z.string(),
+                paths: z.union([z.string(), z.array(z.string())]),
               })
               .parse(args);
 
             const ws = this.getWorkspace(workspace);
-            const result = await ws.checkSwift(filePath);
+            const result = await ws.check(paths);
 
             return {
               content: [
@@ -464,8 +490,10 @@ class WorkspaceMCPServer {
             throw new Error(`Unknown tool: ${name}`);
         }
       } catch (error) {
-        // Structured error response
-        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorMessage = error instanceof ZodError
+          ? this.formatZodError(error, name, args)
+          : error instanceof Error ? error.message : String(error);
+
         return {
           content: [
             {
@@ -485,6 +513,29 @@ class WorkspaceMCPServer {
       throw new Error(`Unknown workspace: ${name}. Available: ${Array.from(this.workspaces.keys()).join(', ')}`);
     }
     return ws;
+  }
+
+  /** Format Zod validation errors into actionable messages for the agent. */
+  private formatZodError(error: ZodError, toolName: string, args: Record<string, unknown> | undefined): string {
+    const provided = args ? Object.keys(args) : [];
+    const issues = error.issues.map(issue => {
+      const field = issue.path.join('.');
+      return `  - "${field}": ${issue.message} (expected ${issue.code === 'invalid_type' ? (issue as any).expected : issue.code})`;
+    });
+
+    const workspaceNames = Array.from(this.workspaces.keys());
+    const parts = [
+      `Invalid parameters for ${toolName}.`,
+      `Issues:\n${issues.join('\n')}`,
+      provided.length > 0
+        ? `You provided: ${provided.map(k => `"${k}"`).join(', ')}`
+        : 'No parameters provided.',
+      workspaceNames.length > 0
+        ? `Available workspaces: ${workspaceNames.map(n => `"${n}"`).join(', ')}`
+        : '',
+    ];
+
+    return parts.filter(Boolean).join('\n');
   }
 
   async start(): Promise<void> {
