@@ -1,6 +1,5 @@
 {
-  "name": "@zillow/workspace-mcp",
-  "private": true,
+  "name": "@exaudeus/workspace-mcp",
   "version": "0.1.0",
   "description": "Multi-workspace filesystem MCP server for cross-platform development",
   "type": "module",
@@ -8,18 +7,48 @@
   "bin": {
     "workspace-mcp": "./dist/index.js"
   },
+  "files": [
+    "dist",
+    "workspace-config.example.json",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
-    "test": "node --import tsx --test src/__tests__/**/*.test.ts"
+    "test": "node --import tsx --test src/__tests__/**/*.test.ts",
+    "prepublishOnly": "npm run build",
+    "semantic-release": "semantic-release"
   },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EtienneBBeaulac/workspace-mcp.git"
+  },
+  "keywords": [
+    "mcp",
+    "workspace",
+    "multi-workspace",
+    "firebender",
+    "ai-agent"
+  ],
+  "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.2.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/exec": "^7.1.0",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^12.0.2",
     "@types/node": "^20.0.0",
+    "conventional-changelog-conventionalcommits": "^9.1.0",
+    "semantic-release": "^24.2.0",
     "tsx": "^4.0.0",
     "typescript": "^5.0.0"
   },

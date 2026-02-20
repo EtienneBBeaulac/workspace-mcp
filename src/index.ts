@@ -36,7 +36,7 @@ class WorkspaceMCPServer {
 
     this.server = new Server(
       {
-        name: '@zillow/workspace-mcp',
+        name: '@exaudeus/workspace-mcp',
         version: '0.1.0',
       },
       {
