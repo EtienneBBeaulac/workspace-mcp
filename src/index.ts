@@ -221,66 +221,7 @@ class WorkspaceMCPServer {
             required: ['workspace', 'pattern'],
           },
         },
-        {
-          name: 'workspace_check',
-          description: 'Syntax-check one or more source files. Auto-detects language from file extension (Swift, TypeScript, Python, Go, Kotlin, Rust). When checking multiple files of the same language (Swift, TypeScript, Go), compiles them together to resolve cross-file references. For full project validation with framework imports, use workspace_build.',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              workspace: {
-                type: 'string',
-                description: this.workspaceDescription(),
-                enum: Array.from(this.workspaces.keys()),
-              },
-              paths: {
-                oneOf: [
-                  { type: 'string' },
-                  { type: 'array', items: { type: 'string' } },
-                ],
-                description: 'Single file path or array of file paths relative to workspace root',
-              },
-            },
-            required: ['workspace', 'paths'],
-          },
-        },
-        {
-          name: 'workspace_run_tests',
-          description: 'Run tests in the workspace. Auto-detects build system and falls back gracefully (Tuist → xcodebuild → swift test). Returns pass/fail counts and failure details.',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              workspace: {
-                type: 'string',
-                description: this.workspaceDescription(),
-                enum: Array.from(this.workspaces.keys()),
-              },
-              testTarget: {
-                type: 'string',
-                description: 'Optional test target/filter (e.g., "MessagingTests")',
-              },
-            },
-            required: ['workspace'],
-          },
-        },
-        {
-          name: 'workspace_build',
-          description: 'Build the workspace. Auto-detects build system and falls back gracefully (Tuist → xcodebuild → swift build). This is the recommended way to validate project code.',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              workspace: {
-                type: 'string',
-                description: this.workspaceDescription(),
-                enum: Array.from(this.workspaces.keys()),
-              },
-              buildTarget: {
-                type: 'string',
-                description: 'Optional build target/scheme',
-              },
-            },
-            required: ['workspace'],
-          },
-        },
+
       ],
     }));
 
@@ -418,69 +359,6 @@ class WorkspaceMCPServer {
                     null,
                     2
                   ),
-                },
-              ],
-            };
-          }
-
-          case 'workspace_check': {
-            const { workspace, paths } = z
-              .object({
-                workspace: z.string(),
-                paths: z.union([z.string(), z.array(z.string())]),
-              })
-              .parse(args);
-
-            const ws = this.getWorkspace(workspace);
-            const result = await ws.check(paths);
-
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify(result, null, 2),
-                },
-              ],
-            };
-          }
-
-          case 'workspace_run_tests': {
-            const { workspace, testTarget } = z
-              .object({
-                workspace: z.string(),
-                testTarget: z.string().optional(),
-              })
-              .parse(args);
-
-            const ws = this.getWorkspace(workspace);
-            const result = await ws.runTests(testTarget);
-
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify(result, null, 2),
-                },
-              ],
-            };
-          }
-
-          case 'workspace_build': {
-            const { workspace, buildTarget } = z
-              .object({
-                workspace: z.string(),
-                buildTarget: z.string().optional(),
-              })
-              .parse(args);
-
-            const ws = this.getWorkspace(workspace);
-            const result = await ws.build(buildTarget);
-
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify(result, null, 2),
                 },
               ],
             };

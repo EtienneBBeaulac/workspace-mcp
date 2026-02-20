@@ -9,7 +9,6 @@ AI coding agents are normally confined to a single workspace. When developing cr
 - Port features from Kotlin to Swift (or vice versa) without context loss
 - Read iOS code to learn conventions while working in Android Studio
 - Generate Swift files directly in the iOS repo
-- Validate Swift syntax before writing
 
 ## Tools Provided
 
@@ -79,28 +78,6 @@ workspace_edit(
 )
 ```
 
-### `workspace_check`
-Syntax-check source files. Auto-detects language from file extension (Swift, TypeScript, Python, Go, Kotlin, Rust). When checking multiple files of the same language, compiles them together to resolve cross-file references.
-
-```typescript
-workspace_check(workspace: "ios", paths: "Modules/.../MyFile.swift")
-workspace_check(workspace: "ios", paths: ["Modules/.../FileA.swift", "Modules/.../FileB.swift"])
-```
-
-### `workspace_run_tests`
-Run tests in the workspace. Auto-detects build system (Tuist -> xcodebuild -> swift test).
-
-```typescript
-workspace_run_tests(workspace: "ios", testTarget: "MessagingTests")
-```
-
-### `workspace_build`
-Build the workspace. Auto-detects build system (Tuist -> xcodebuild -> swift build).
-
-```typescript
-workspace_build(workspace: "ios", buildTarget: "MessagingCoordinator")
-```
-
 ## Configuration
 
 Create a `workspace-config.json` in the repo root (see `workspace-config.example.json`):
@@ -145,8 +122,7 @@ Added to `~/.firebender/firebender.json`:
 2. Agent reads iOS conventions: `workspace_read("ios", "Modules/Messaging/Sources/MessagingCoordinator/SubjectCoordinator.swift")`
 3. Agent references Rosetta mapping: (read `.firebender/rosetta-kotlin-swift.md` in Android workspace)
 4. Agent generates Swift equivalent
-5. Agent validates: `workspace_check("ios", "Modules/.../KeyReducer.swift")`
-6. Agent writes: `workspace_write("ios", "Modules/.../KeyReducer.swift", content)`
+5. Agent writes: `workspace_write("ios", "Modules/.../KeyReducer.swift", content)`
 
 All in one session, no context loss.
 
@@ -198,7 +174,6 @@ The MCP uses **stateless validation** instead of session tracking - no brittle s
 - **Path validation**: Resolved paths are verified to stay within workspace root (prevents directory traversal)
 - **Shell injection prevention**: All external commands use `execFile` with argument arrays (no shell interpolation)
 - **Audit logging**: All write/edit operations logged to stderr
-- **Graceful degradation**: Syntax checking is optional (works without language toolchains)
 
 ## Future Enhancements
 

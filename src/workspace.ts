@@ -52,14 +52,6 @@ export interface Workspace {
   /** Search for pattern in workspace files using ripgrep. */
   search(pattern: string, options?: SearchOptions): Promise<SearchResult[]>;
 
-  /** Syntax-check source files. Auto-detects language. Multi-file compilation for cross-file refs. */
-  check(relativePaths: string | string[]): Promise<BatchCheckResult>;
-
-  /** Run tests. Auto-detects build system (Tuist -> xcodebuild -> swift test). */
-  runTests(testTarget?: string): Promise<TestResult>;
-
-  /** Build the workspace. Auto-detects build system. */
-  build(buildTarget?: string): Promise<BuildResult>;
 }
 
 export interface FileEntry {
@@ -95,36 +87,6 @@ export interface CountSearchResult {
   mode: 'count';
   file: string;
   count: number;
-}
-
-export interface TestResult {
-  success: boolean;
-  passed: number;
-  failed: number;
-  skipped: number;
-  failures?: Array<{
-    test: string;
-    error: string;
-  }>;
-  output?: string;
-}
-
-export type BuildResult =
-  | { success: true; output: string }
-  | { success: false; errors: string[] }
-  | { success: false; unavailable: true; reason: string };
-
-/** Batch result returned by check() for both single and multiple files. */
-export interface BatchCheckResult {
-  totalFiles: number;
-  passed: number;
-  failed: number;
-  results: Array<{
-    file: string;
-    language: string;
-    success: boolean;
-    errors?: string[];
-  }>;
 }
 
 export interface BatchEditResult {
