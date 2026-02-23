@@ -101,16 +101,34 @@ Create a `workspace-config.json` in the repo root (see `workspace-config.example
 
 Supports `$HOME` and `~` expansion in `root` paths. There are no hardcoded defaults — all workspaces must be defined in this file. If missing, the server starts with zero workspaces and logs instructions.
 
+## Installation
+
+```bash
+npm install -g @exaudeus/workspace-mcp
+```
+
 ### Firebender Registration
 
-Added to `~/.firebender/firebender.json`:
+Add to `~/.firebender/firebender.json`:
 
 ```json
 {
   "mcpServers": {
     "workspace": {
-      "command": "node",
-      "args": ["<path-to-workspace-mcp>/dist/index.js"]
+      "command": "npx",
+      "args": ["-y", "@exaudeus/workspace-mcp"]
+    }
+  }
+}
+```
+
+Alternatively, if installed globally:
+
+```json
+{
+  "mcpServers": {
+    "workspace": {
+      "command": "workspace-mcp"
     }
   }
 }
