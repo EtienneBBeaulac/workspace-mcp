@@ -610,6 +610,9 @@ describe('LocalFilesystemWorkspace', () => {
         'utf-8'
       );
 
+      // Wait for filesystem to settle (macOS can be slow)
+      await new Promise(resolve => setTimeout(resolve, 50));
+
       // Search scoped to 'src' should only find src/search-target.swift
       const results = await ws.search('findMe', { path: 'src', outputMode: 'files' });
       assert.ok(results.length >= 1);
@@ -733,6 +736,9 @@ describe('LocalFilesystemWorkspace', () => {
       await fs.writeFile(path.join(root, 'mixed/code.swift'), 'findMe swift\n', 'utf-8');
       await fs.writeFile(path.join(root, 'mixed/code.txt'), 'findMe text\n', 'utf-8');
 
+      // Wait for filesystem to settle (macOS can be slow)
+      await new Promise(resolve => setTimeout(resolve, 50));
+
       // Search with path + glob should intersect both filters
       const results = await ws.search('findMe', { path: 'mixed', glob: '**/*.swift', outputMode: 'files' });
       assert.equal(results.length, 1);
@@ -754,6 +760,9 @@ describe('LocalFilesystemWorkspace', () => {
     it('handles files with hyphens in path', async () => {
       await fs.mkdir(path.join(root, 'my-module'), { recursive: true });
       await fs.writeFile(path.join(root, 'my-module/my-file.swift'), 'findMe here\n', 'utf-8');
+
+      // Wait for filesystem to settle (macOS can be slow)
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       const results = await ws.search('findMe', { path: 'my-module', outputMode: 'content' });
       assert.ok(results.length >= 1, 'Should find match in hyphenated path');
