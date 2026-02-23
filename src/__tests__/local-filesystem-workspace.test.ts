@@ -672,13 +672,15 @@ describe('LocalFilesystemWorkspace', () => {
     });
 
     it('paginates content results with limit', async () => {
-      const results = await ws.search('findMe', { outputMode: 'content', limit: 1 });
+      // Scope to src/ to avoid counting files created by other tests
+      const results = await ws.search('findMe', { path: 'src/search-target.swift', outputMode: 'content', limit: 1 });
       assert.equal(results.length, 1, 'Limit=1 should return exactly 1 result');
     });
 
     it('paginates content results with offset', async () => {
-      const all = await ws.search('findMe', { outputMode: 'content' });
-      const skipped = await ws.search('findMe', { outputMode: 'content', offset: 1 });
+      // Scope to src/ to avoid counting files created by other tests
+      const all = await ws.search('findMe', { path: 'src/search-target.swift', outputMode: 'content' });
+      const skipped = await ws.search('findMe', { path: 'src/search-target.swift', outputMode: 'content', offset: 1 });
       assert.equal(skipped.length, all.length - 1, 'Offset=1 should skip first result');
       if (all[1]?.mode === 'content' && skipped[0]?.mode === 'content') {
         assert.equal(skipped[0].line, all[1].line);
