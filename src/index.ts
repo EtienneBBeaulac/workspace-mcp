@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // Multi-Workspace MCP Server
-// Enables Firebender agents to access multiple repository workspaces from a single session
+// Enables coding agents to access multiple repository workspaces from a single session
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -53,8 +53,8 @@ class WorkspaceMCPServer {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: [
         {
-          name: 'workspace_read',
-          description: 'Read a file from a workspace. Returns up to 500 lines by default (use offset/limit to paginate). Response includes line numbers and metadata (totalLines, range, truncated).',
+          name: 'read_crossproject',
+          description: 'Read a file from a configured workspace root, usually a companion repo outside the current project workspace. Prefer the IDE built-in read/navigation tools for files in the current workspace. Returns up to 500 lines by default with line numbers and metadata (totalLines, range, truncated); use offset/limit to paginate.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -80,8 +80,8 @@ class WorkspaceMCPServer {
           },
         },
         {
-          name: 'workspace_write',
-          description: 'Write a file to a workspace. Only writes to paths matching the workspace write allowlist (defined in workspace-config.json). Logs all writes.',
+          name: 'write_crossproject',
+          description: 'Create or overwrite a file in a configured workspace root, typically another repo exposed through this MCP rather than the current project. Prefer built-in IDE editing/refactoring tools for current-workspace files. Only writes to paths matching the workspace write allowlist (defined in workspace-config.json), and logs all writes.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -103,8 +103,8 @@ class WorkspaceMCPServer {
           },
         },
         {
-          name: 'workspace_edit',
-          description: 'Edit one or more files in a workspace using search and replace. Same find/replace operation applied to all specified files. The oldString must be unique per file unless replaceAll is true. Respects write allowlist. When useRegex=true, newString supports regex backreferences ($1, $2, etc.).',
+          name: 'edit_crossproject',
+          description: 'Apply search-and-replace edits to one or more files in a configured workspace root, typically for companion repos outside the current project workspace. Prefer built-in IDE refactoring/editing tools for typed changes in the current workspace. The same find/replace runs on all specified files; oldString must be unique per file unless replaceAll is true. Respects the write allowlist, and when useRegex=true, newString supports regex backreferences ($1, $2, etc.).',
           inputSchema: {
             type: 'object',
             properties: {
@@ -143,8 +143,8 @@ class WorkspaceMCPServer {
           },
         },
         {
-          name: 'workspace_list',
-          description: 'List directory contents with metadata (type, size, modified date). Supports recursive tree listing.',
+          name: 'list_crossproject',
+          description: 'List files and directories in a configured workspace root, usually an external or companion repo rather than the current project workspace. Returns metadata (type, size, modified date) and supports recursive tree listing.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -172,8 +172,8 @@ class WorkspaceMCPServer {
           },
         },
         {
-          name: 'workspace_search',
-          description: 'Search for text/regex using ripgrep with output modes, context lines, case-insensitive option, and pagination. When using contextLines, results include contextBefore/contextAfter arrays.',
+          name: 'search_crossproject',
+          description: 'Search text or regex in a configured workspace root, usually a companion repo outside the current project workspace. Prefer built-in code navigation/LSP tools in the current workspace when they apply. Uses ripgrep with output modes, context lines, case-insensitive matching, and pagination; when using contextLines, results include contextBefore/contextAfter arrays.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -230,7 +230,7 @@ class WorkspaceMCPServer {
 
       try {
         switch (name) {
-          case 'workspace_read': {
+          case 'read_crossproject': {
             const { workspace, path: filePath, ...readOptions } = z
               .object({
                 workspace: z.string(),
@@ -257,7 +257,7 @@ class WorkspaceMCPServer {
             };
           }
 
-          case 'workspace_write': {
+          case 'write_crossproject': {
             const { workspace, path: filePath, content } = z
               .object({
                 workspace: z.string(),
@@ -279,7 +279,7 @@ class WorkspaceMCPServer {
             };
           }
 
-          case 'workspace_edit': {
+          case 'edit_crossproject': {
             const { workspace, paths, oldString, newString, ...editOptions } = z
               .object({
                 workspace: z.string(),
@@ -304,7 +304,7 @@ class WorkspaceMCPServer {
             };
           }
 
-          case 'workspace_list': {
+          case 'list_crossproject': {
             const { workspace, ...listOptions } = z
               .object({
                 workspace: z.string(),
@@ -327,7 +327,7 @@ class WorkspaceMCPServer {
             };
           }
 
-          case 'workspace_search': {
+          case 'search_crossproject': {
             const { workspace, pattern, ...searchOptions } = z
               .object({
                 workspace: z.string(),

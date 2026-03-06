@@ -11,17 +11,17 @@
 ## Path 2: Full Pipeline Features
 
 ### Git Operations
-- `workspace_git(workspace, command)` - Execute git commands in workspace
-- `workspace_branch(workspace, name)` - Create new branch
-- `workspace_commit(workspace, message, files)` - Commit changes
-- `workspace_push(workspace, branch)` - Push to remote
-- `workspace_create_mr(workspace, title, body)` - Create GitLab MR
+- `git_crossproject(workspace, command)` - Execute git commands in workspace
+- `branch_crossproject(workspace, name)` - Create new branch
+- `commit_crossproject(workspace, message, files)` - Commit changes
+- `push_crossproject(workspace, branch)` - Push to remote
+- `create_mr_crossproject(workspace, title, body)` - Create GitLab MR
 
 **Value**: Enable complete code delivery workflow without leaving Firebender session
 
 ### Porting State Tracker
-- `workspace_port_status()` - View porting progress
-- `workspace_mark_ported(android_file, ios_file, status)` - Track completion
+- `port_status_crossproject()` - View porting progress
+- `mark_ported_crossproject(android_file, ios_file, status)` - Track completion
 - Persistent `.porting-state.json` in Android workspace
 - Resume across sessions
 
@@ -35,15 +35,15 @@
 **Value**: Systematic approach with built-in quality gates
 
 ### Auto-Context Loading
-- On first `workspace_read` for a workspace, check for `.firebender/platform-context.md`
+- On first `read_crossproject` for a workspace, check for `.firebender/platform-context.md`
 - If exists, inject as additional context in response
 - Agent gets iOS conventions automatically without explicit read
 
 **Value**: Zero-friction platform awareness
 
 ### Module Structure Helper
-- `workspace_describe_modules(workspace)` - Return module structure (Tuist/SPM/Gradle)
-- `workspace_suggest_location(workspace, file_type, purpose)` - Recommend where new files should go
+- `describe_modules_crossproject(workspace)` - Return module structure (Tuist/SPM/Gradle)
+- `suggest_location_crossproject(workspace, file_type, purpose)` - Recommend where new files should go
 - Understands Tuist, Swift Package Manager, Gradle module conventions
 
 **Value**: Prevents "wrote to wrong module" errors
@@ -51,7 +51,7 @@
 ## Path 2.5: Smart Auto-Converter (Optional Performance Enhancement)
 
 ### Auto-Port Tool
-- `workspace_auto_convert(workspace, sourceFile, targetPath, sourceLang, targetLang)` 
+- `auto_convert_crossproject(workspace, sourceFile, targetPath, sourceLang, targetLang)` 
 - Parses Kotlin AST (or regex-based for MVP)
 - Applies mechanical translations (sealed → enum, data class → struct, etc.)
 - Inserts `// TODO: [AGENT]` markers for ambiguous cases (concurrency model, file organization)
@@ -67,7 +67,7 @@
 **Current approach already works great**: 47 files in 2 hours with parallel subagents. Auto-converter would take 1-2 days to build reliably. Build it only if batch porting becomes frequent.
 
 ### Translation Quality Analyzer
-- `workspace_analyze_translation(androidFile, iosFile)`
+- `analyze_translation_crossproject(androidFile, iosFile)`
 - Compares ported Swift against Kotlin source
 - Reports: structural differences, missing cases, type mismatches
 - Helps verify subagent translations are complete
@@ -109,7 +109,7 @@
 **Finding**: WorkRail executor subagents CAN access the workspace MCP tools, but the configuration may not propagate correctly in all cases.
 
 **Observed behavior**:
-- Test subagent: Successfully used `mcp_workspace_workspace_read` directly ✅
+- Test subagent: Successfully used `mcp_workspace_read_crossproject` directly ✅
 - Port subagent: Tried to use workspace MCP but reported it wasn't accessible, fell back to `/tmp/` ❌
 
 **Hypothesis**: Subagents may need explicit MCP re-initialization or the workspace config isn't inherited from parent session.
@@ -124,22 +124,22 @@
 ## Future Features (Post-v1.0)
 
 ### Git Integration
-- `workspace_git_status`, `workspace_git_diff`, `workspace_git_commit`, `workspace_git_branch`, `workspace_git_push`
+- `git_status_crossproject`, `git_diff_crossproject`, `git_commit_crossproject`, `git_branch_crossproject`, `git_push_crossproject`
 - **Value**: Complete workflow - port → commit → push → MR creation
 - **Effort**: ~2 hours
 
 ### Dependency Analysis  
-- `workspace_find_imports`, `workspace_find_usages`, `workspace_get_definition`
+- `find_imports_crossproject`, `find_usages_crossproject`, `get_definition_crossproject`
 - **Value**: Help agent understand cross-file dependencies before porting
 - **Effort**: ~3 hours (could use LSP)
 
 ### Xcode/Tuist Integration
-- `workspace_xcodebuild(action, scheme)`, `workspace_tuist(command)`, `workspace_add_to_project`
+- `xcodebuild_crossproject(action, scheme)`, `tuist_crossproject(command)`, `add_to_project_crossproject`
 - **Value**: Full iOS build/test workflow (currently limited to SPM)
 - **Effort**: ~2 hours
 
 ### Batch Operations
-- `workspace_batch_edit`, `workspace_batch_validate`, `workspace_copy_structure`
+- `batch_edit_crossproject`, `batch_validate_crossproject`, `copy_structure_crossproject`
 - **Value**: Apply same edit to multiple files at once
 - **Effort**: ~1 hour
 
@@ -150,7 +150,7 @@
 - **Effort**: ~30 minutes
 
 ### Module Structure Helper
-- `workspace_describe_module`, `workspace_suggest_location`, `workspace_validate_module`
+- `describe_module_crossproject`, `suggest_location_crossproject`, `validate_module_crossproject`
 - **Value**: Guide agent to correct file locations
 - **Effort**: ~2 hours
 
@@ -161,12 +161,12 @@
 - **Effort**: ~3 hours
 
 ### Diff & Comparison
-- `workspace_diff(file1, file2)`, `workspace_compare_ports`, `workspace_verify_equivalence`
+- `diff_crossproject(file1, file2)`, `compare_ports_crossproject`, `verify_equivalence_crossproject`
 - **Value**: Verify ports are behaviorally equivalent
 - **Effort**: ~2 hours
 
 ### Porting Session State
-- `workspace_port_status`, `workspace_mark_ported`, persistent `.porting-state.json`
+- `port_status_crossproject`, `mark_ported_crossproject`, persistent `.porting-state.json`
 - **Value**: Resume multi-day ports across sessions
 - **Effort**: ~1 hour
 

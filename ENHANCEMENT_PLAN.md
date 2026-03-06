@@ -47,24 +47,24 @@ Pagination:
 
 ## Enhancements to Implement
 
-### 1. workspace_read: Add Line Numbers + Pagination
+### 1. read_crossproject: Add Line Numbers + Pagination
 
 **Current**:
 ```typescript
-workspace_read("ios", "path/to/file.swift")
+read_crossproject("ios", "path/to/file.swift")
 // Returns: plain text content
 ```
 
 **Enhanced**:
 ```typescript
-workspace_read("ios", "path/to/file.swift")
+read_crossproject("ios", "path/to/file.swift")
 // Returns: 
 //   1→import Foundation
 //   2→
 //   3→class MyClass {
 // ...
 
-workspace_read("ios", "path/to/file.swift", offset: 50, limit: 20)
+read_crossproject("ios", "path/to/file.swift", offset: 50, limit: 20)
 // Returns: lines 50-69 (plain text for editing)
 ```
 
@@ -73,36 +73,36 @@ workspace_read("ios", "path/to/file.swift", offset: 50, limit: 20)
 - With offset/limit: return plain text (for editing)
 - Match Firebender's cat -n format exactly
 
-### 2. workspace_search: Add Output Modes + Context + Pagination
+### 2. search_crossproject: Add Output Modes + Context + Pagination
 
 **Current**:
 ```typescript
-workspace_search("ios", "pattern", "**/*.swift")
+search_crossproject("ios", "pattern", "**/*.swift")
 // Returns: [{file, line, content}, ...]
 ```
 
 **Enhanced**:
 ```typescript
 // Content mode (default) with line numbers
-workspace_search("ios", "FlowCoordinator", glob: "**/*.swift", outputMode: "content")
+search_crossproject("ios", "FlowCoordinator", glob: "**/*.swift", outputMode: "content")
 // Returns:
 // KeyReducer.swift:42: func reduce(state: KeyState<Data>...
 // KeyReducer.swift:100: // FlowCoordinator v2 reducer
 
 // Files only mode
-workspace_search("ios", "FlowCoordinator", glob: "**/*.swift", outputMode: "files")
+search_crossproject("ios", "FlowCoordinator", glob: "**/*.swift", outputMode: "files")
 // Returns: [KeyReducer.swift, KeyCoordinator.swift, ...]
 
 // Count mode  
-workspace_search("ios", "FlowCoordinator", outputMode: "count")
+search_crossproject("ios", "FlowCoordinator", outputMode: "count")
 // Returns: [{file: "KeyReducer.swift", count: 15}, ...]
 
 // With context lines
-workspace_search("ios", "func reduce", contextLines: 3)
+search_crossproject("ios", "func reduce", contextLines: 3)
 // Returns 3 lines before + match + 3 lines after
 
 // With pagination
-workspace_search("ios", "import", limit: 50, offset: 0)
+search_crossproject("ios", "import", limit: 50, offset: 0)
 // First 50 matches, skip 0
 ```
 
@@ -111,18 +111,18 @@ workspace_search("ios", "import", limit: 50, offset: 0)
 - Parse output based on mode
 - Add limit/offset slicing
 
-### 3. workspace_edit: Add Read-First Validation + Better Preview
+### 3. edit_crossproject: Add Read-First Validation + Better Preview
 
 **Current**:
 ```typescript
-workspace_edit("ios", "path", "old", "new")
+edit_crossproject("ios", "path", "old", "new")
 // Returns: {success: true, occurrences: 1, preview: {...}}
 ```
 
 **Enhanced**:
 ```typescript
-workspace_edit("ios", "path", "old", "new")
-// REQUIRES prior workspace_read("ios", "path") call
+edit_crossproject("ios", "path", "old", "new")
+// REQUIRES prior read_crossproject("ios", "path") call
 // Returns:
 // {
 //   success: true,
@@ -151,25 +151,25 @@ workspace_edit("ios", "path", "old", "new")
 - Enhanced preview with line numbers
 - Show more context (currently 3 lines, could be configurable)
 
-### 4. workspace_write: Add Read-First Requirement for Existing Files
+### 4. write_crossproject: Add Read-First Requirement for Existing Files
 
 **Current**:
 ```typescript
-workspace_write("ios", "ExistingFile.swift", content)
+write_crossproject("ios", "ExistingFile.swift", content)
 // Overwrites without check (dangerous)
 ```
 
 **Enhanced**:
 ```typescript
 // New file: works as-is
-workspace_write("ios", "NewFile.swift", content) → ✅
+write_crossproject("ios", "NewFile.swift", content) → ✅
 
 // Existing file: requires read first
-workspace_write("ios", "ExistingFile.swift", content) → ❌ Error: "Must read file before overwriting"
+write_crossproject("ios", "ExistingFile.swift", content) → ❌ Error: "Must read file before overwriting"
 
 // After reading:
-workspace_read("ios", "ExistingFile.swift")
-workspace_write("ios", "ExistingFile.swift", content) → ✅
+read_crossproject("ios", "ExistingFile.swift")
+write_crossproject("ios", "ExistingFile.swift", content) → ✅
 ```
 
 **Implementation**:
@@ -211,29 +211,29 @@ workspace_write("ios", "ExistingFile.swift", content) → ✅
 
 **Read with line numbers**:
 ```
-workspace_read("ios", "KeyReducer.swift")
+read_crossproject("ios", "KeyReducer.swift")
 → Shows file with line numbers for navigation
 
-workspace_read("ios", "KeyReducer.swift", offset: 100, limit: 50)  
+read_crossproject("ios", "KeyReducer.swift", offset: 100, limit: 50)  
 → Shows lines 100-149 (plain, ready to edit)
 ```
 
 **Search flexibly**:
 ```
-workspace_search("ios", "TODO", outputMode: "files")
+search_crossproject("ios", "TODO", outputMode: "files")
 → Which files have TODOs?
 
-workspace_search("ios", "func reduce", outputMode: "count")
+search_crossproject("ios", "func reduce", outputMode: "count")
 → How many times is reduce mentioned per file?
 
-workspace_search("ios", "async func", contextLines: 5, limit: 10)
+search_crossproject("ios", "async func", contextLines: 5, limit: 10)
 → First 10 matches with 5 lines before/after each
 ```
 
 **Edit safely**:
 ```
-workspace_read("ios", "MyFile.swift")  // Required first
-workspace_edit("ios", "MyFile.swift", "old", "new")
+read_crossproject("ios", "MyFile.swift")  // Required first
+edit_crossproject("ios", "MyFile.swift", "old", "new")
 → Preview shows:
   Before:
     39: old function

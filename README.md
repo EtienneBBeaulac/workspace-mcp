@@ -1,6 +1,6 @@
 # Multi-Workspace MCP Server
 
-Enables Firebender agents to read/write files in multiple repository workspaces from a single session.
+Enables coding agents to access configured repository workspaces from a single session, especially companion repos outside the current project workspace.
 
 ## Problem Solved
 
@@ -9,50 +9,51 @@ AI coding agents are normally confined to a single workspace. When developing cr
 - Port features from Kotlin to Swift (or vice versa) without context loss
 - Read iOS code to learn conventions while working in Android Studio
 - Generate Swift files directly in the iOS repo
+- Search and inspect another repo without leaving the current agent session
 
 ## Tools Provided
 
-### `workspace_read`
-Read a file from a workspace. Returns up to 500 lines by default with line numbers and metadata (`totalLines`, `startLine`, `endLine`, `truncated`). Use `offset`/`limit` to paginate.
+### `read_crossproject`
+Read a file from a **configured workspace root** — usually a companion repo outside the current project workspace. Prefer the IDE's built-in read/navigation tools for files in the current workspace. Returns up to 500 lines by default with line numbers and metadata (`totalLines`, `startLine`, `endLine`, `truncated`). Use `offset`/`limit` to paginate.
 
 ```typescript
-workspace_read(workspace: "ios", path: "Modules/Messaging/Sources/MessagingCoordinator/StreamState.swift")
-workspace_read(workspace: "ios", path: "Modules/.../LargeFile.swift", offset: 100, limit: 50)
+read_crossproject(workspace: "ios", path: "Modules/Messaging/Sources/MessagingCoordinator/StreamState.swift")
+read_crossproject(workspace: "ios", path: "Modules/.../LargeFile.swift", offset: 100, limit: 50)
 ```
 
-### `workspace_write`
-Write a file to a workspace. Only writes to paths matching the workspace write allowlist (defined in `workspace-config.json`).
+### `write_crossproject`
+Create or overwrite a file in a **configured workspace root** — typically another repo exposed through this MCP, not the current project. Prefer the IDE's built-in editing/refactoring tools for current-workspace files. Only writes to paths matching the workspace write allowlist (defined in `workspace-config.json`).
 
 ```typescript
-workspace_write(
+write_crossproject(
   workspace: "ios",
   path: "Modules/Messaging/Sources/MessagingCoordinator/v2/KeyReducer.swift",
   content: "// Swift code here"
 )
 ```
 
-### `workspace_list`
-List directory contents with metadata (type, size, modified date). Supports recursive tree listing.
+### `list_crossproject`
+List files and directories in a **configured workspace root**, usually an external or companion repo rather than the current project workspace. Returns metadata (type, size, modified date) and supports recursive tree listing.
 
 ```typescript
-workspace_list(workspace: "ios", path: "Modules/Messaging/Sources")
-workspace_list(workspace: "ios", path: "Modules", recursive: true, maxDepth: 2)
+list_crossproject(workspace: "ios", path: "Modules/Messaging/Sources")
+list_crossproject(workspace: "ios", path: "Modules", recursive: true, maxDepth: 2)
 ```
 
-### `workspace_search`
-Search for text/regex in workspace files using ripgrep. Supports output modes (`content`, `files`, `count`), context lines, path scoping (directory or file), and pagination.
+### `search_crossproject`
+Search text/regex in files inside a **configured workspace root**, usually a companion repo outside the current project workspace. Prefer the IDE's built-in code navigation/LSP tools in the current workspace when they apply. Supports output modes (`content`, `files`, `count`), context lines, path scoping (directory or file), and pagination.
 
 ```typescript
-workspace_search(workspace: "ios", pattern: "FlowCoordinator", glob: "**/*.swift")
-workspace_search(workspace: "ios", pattern: "class.*Coordinator", path: "Modules/Messaging", outputMode: "files")
+search_crossproject(workspace: "ios", pattern: "FlowCoordinator", glob: "**/*.swift")
+search_crossproject(workspace: "ios", pattern: "class.*Coordinator", path: "Modules/Messaging", outputMode: "files")
 ```
 
-### `workspace_edit`
-Edit one or more files using search and replace. Supports regex with backreferences.
+### `edit_crossproject`
+Apply search-and-replace edits to one or more files in a **configured workspace root**, typically for companion repos outside the current project workspace. Prefer the IDE's built-in refactoring/editing tools for typed changes in the current workspace. Supports regex with backreferences.
 
 ```typescript
 // Single file
-workspace_edit(
+edit_crossproject(
   workspace: "ios",
   paths: "Modules/.../MyFile.swift",
   oldString: "func oldName()",
@@ -60,7 +61,7 @@ workspace_edit(
 )
 
 // Multiple files (same replacement applied to all)
-workspace_edit(
+edit_crossproject(
   workspace: "ios",
   paths: ["FileA.swift", "FileB.swift", "FileC.swift"],
   oldString: "oldValue",
@@ -69,7 +70,7 @@ workspace_edit(
 )
 
 // Regex with backreferences
-workspace_edit(
+edit_crossproject(
   workspace: "ios",
   paths: "Modules/.../MyFile.swift",
   oldString: "func (\\w+)\\(param: String\\)",
@@ -137,10 +138,10 @@ Alternatively, if installed globally:
 ## Usage Pattern
 
 1. Agent reads Android Kotlin file: `read_file("libraries/illuminate/flow-coordinator/v2/KeyReducer.kt")`
-2. Agent reads iOS conventions: `workspace_read("ios", "Modules/Messaging/Sources/MessagingCoordinator/SubjectCoordinator.swift")`
+2. Agent reads iOS conventions: `read_crossproject("ios", "Modules/Messaging/Sources/MessagingCoordinator/SubjectCoordinator.swift")`
 3. Agent references Rosetta mapping: (read `.firebender/rosetta-kotlin-swift.md` in Android workspace)
 4. Agent generates Swift equivalent
-5. Agent writes: `workspace_write("ios", "Modules/.../KeyReducer.swift", content)`
+5. Agent writes: `write_crossproject("ios", "Modules/.../KeyReducer.swift", content)`
 
 All in one session, no context loss.
 
@@ -195,6 +196,6 @@ The MCP uses **stateless validation** instead of session tracking - no brittle s
 
 ## Future Enhancements
 
-- Git operations (`workspace_git`)
+- Git operations (`git_crossproject`)
 - Additional workspaces (backend repos, etc.)
 - Auto-context loading (inject `.firebender/platform-context.md` on first access)

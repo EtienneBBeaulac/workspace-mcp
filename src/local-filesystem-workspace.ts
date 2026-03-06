@@ -40,7 +40,7 @@ export class LocalFilesystemWorkspace implements Workspace {
         const sizeMB = (stats.size / 1024 / 1024).toFixed(2);
         throw new Error(
           `File too large: ${sizeMB}MB (max 5MB). Use offset/limit to read specific sections, ` +
-          `or use workspace_search to find specific content.`
+          `or use search_crossproject to find specific content.`
         );
       }
       
@@ -84,7 +84,7 @@ export class LocalFilesystemWorkspace implements Workspace {
     try {
       const existing = await fs.readFile(fullPath, 'utf-8');
       if (existing.trim().length > 0) {
-        console.error(`[MCP] WARNING: Overwriting existing file ${relativePath} (${existing.split('\n').length} lines). Consider using workspace_edit for surgical changes.`);
+        console.error(`[MCP] WARNING: Overwriting existing file ${relativePath} (${existing.split('\n').length} lines). Consider using edit_crossproject for surgical changes.`);
       }
     } catch (error: any) {
       // File doesn't exist - new file, no warning needed
