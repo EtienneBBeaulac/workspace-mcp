@@ -3,12 +3,7 @@
     "ios": {
       "root": "$HOME/git/zillow/ZillowMap",
       "name": "iOS (ZillowMap)",
-      "writeAllowlist": [
-        "Modules/**/*.swift",
-        "Tests/**/*.swift",
-        "Apps/**/*.swift",
-        "Examples/**/*.swift"
-      ]
+      "runAllowlist": ["git", "fastlane", "xcodebuild", "swift"]
     }
   }
 }

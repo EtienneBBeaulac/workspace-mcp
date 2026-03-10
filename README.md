@@ -22,7 +22,7 @@ read_crossproject(workspace: "ios", path: "Modules/.../LargeFile.swift", offset:
 ```
 
 ### `write_crossproject`
-Create or overwrite a file in a **configured workspace root** — typically another repo exposed through this MCP, not the current project. Prefer the IDE's built-in editing/refactoring tools for current-workspace files. Only writes to paths matching the workspace write allowlist (defined in `workspace-config.json`).
+Create or overwrite a file in a **configured workspace root** — typically another repo exposed through this MCP, not the current project. Prefer the IDE's built-in editing/refactoring tools for current-workspace files. If a `writeAllowlist` is configured, only matching paths are writable.
 
 ```typescript
 write_crossproject(
@@ -79,6 +79,16 @@ edit_crossproject(
 )
 ```
 
+### `run_crossproject`
+Run a shell command in a **configured workspace root**. Supports pipes, redirects, and chained commands. Returns stdout, stderr, and exit code. Use for build tools, codegen, git operations, or any command that needs to run in the workspace directory.
+
+```typescript
+run_crossproject(workspace: "ios", command: "git status")
+run_crossproject(workspace: "ios", command: "fastlane ios codegen_messaging")
+run_crossproject(workspace: "android", command: "./gradlew :messaging:impl:test")
+run_crossproject(workspace: "ios", command: "git log --oneline | head -5", timeout: 10000)
+```
+
 ## Configuration
 
 Create a `workspace-config.json` in the repo root (see `workspace-config.example.json`):
@@ -88,17 +98,29 @@ Create a `workspace-config.json` in the repo root (see `workspace-config.example
   "workspaces": {
     "ios": {
       "root": "$HOME/git/zillow/ZillowMap",
-      "name": "iOS (ZillowMap)",
-      "writeAllowlist": [
-        "Modules/**/*.swift",
-        "Tests/**/*.swift",
-        "Apps/**/*.swift",
-        "Examples/**/*.swift"
-      ]
+      "name": "iOS (ZillowMap)"
     }
   }
 }
 ```
+
+By default, the agent can write to any file and run any command within the workspace root. To restrict either, add optional allowlists:
+
+```json
+{
+  "workspaces": {
+    "ios": {
+      "root": "$HOME/git/zillow/ZillowMap",
+      "name": "iOS (ZillowMap)",
+      "writeAllowlist": ["Modules/**/*.swift", "Tests/**/*.swift"],
+      "runAllowlist": ["git", "fastlane", "xcodebuild", "swift"]
+    }
+  }
+}
+```
+
+- **`writeAllowlist`** (optional): Glob patterns. If omitted, all writes allowed. Controls `write_crossproject` and `edit_crossproject`.
+- **`runAllowlist`** (optional): Command prefixes. If omitted, all commands allowed. Controls `run_crossproject`. When configured, the first word of the command must match one of the prefixes (e.g., `"git status"` matches `"git"`).
 
 Supports `$HOME` and `~` expansion in `root` paths. There are no hardcoded defaults — all workspaces must be defined in this file. If missing, the server starts with zero workspaces and logs instructions.
 
@@ -180,7 +202,7 @@ The MCP uses **stateless validation** instead of session tracking - no brittle s
 **Write Safety**:
 - Warns when overwriting existing files (logged to stderr)
 - Agent can still overwrite if intentional (not blocked)
-- Allowlist enforced for all writes
+- Optional `writeAllowlist` restricts writes to matching paths (omit to allow all)
 
 **Why Stateless?**
 - No session state = no brittleness across restarts/reconnects
@@ -189,7 +211,7 @@ The MCP uses **stateless validation** instead of session tracking - no brittle s
 - Self-documenting (failures explain what's wrong)
 
 ### Other Safety Features
-- **Write allowlist**: Only allows writes to paths matching the configured allowlist patterns
+- **Write allowlist (optional)**: When configured, only allows writes to paths matching the allowlist patterns
 - **Path validation**: Resolved paths are verified to stay within workspace root (prevents directory traversal)
 - **Shell injection prevention**: All external commands use `execFile` with argument arrays (no shell interpolation)
 - **Audit logging**: All write/edit operations logged to stderr

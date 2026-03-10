@@ -432,6 +432,60 @@ describe('LocalFilesystemWorkspace', () => {
     });
   });
 
+  // --- no allowlist (open writes) ---
+
+  describe('no writeAllowlist (all writes allowed)', () => {
+    let ws: LocalFilesystemWorkspace;
+    let root: string;
+    let cleanup: () => Promise<void>;
+
+    before(async () => {
+      root = await fs.mkdtemp(path.join(os.tmpdir(), 'workspace-mcp-test-'));
+      const config: WorkspaceConfig = {
+        root,
+        name: 'open-test',
+        // No writeAllowlist — all paths within root should be writable
+      };
+      ws = new LocalFilesystemWorkspace(config);
+      cleanup = async () => {
+        await fs.rm(root, { recursive: true, force: true });
+      };
+    });
+
+    after(async () => {
+      await cleanup();
+    });
+
+    it('allows writing any file type without allowlist', async () => {
+      await ws.write('src/file.swift', 'swift content');
+      await ws.write('data/query.graphql', 'graphql content');
+      await ws.write('config/settings.json', '{}');
+      await ws.write('docs/readme.txt', 'text content');
+
+      const swift = await fs.readFile(path.join(root, 'src/file.swift'), 'utf-8');
+      const graphql = await fs.readFile(path.join(root, 'data/query.graphql'), 'utf-8');
+      const json = await fs.readFile(path.join(root, 'config/settings.json'), 'utf-8');
+      const txt = await fs.readFile(path.join(root, 'docs/readme.txt'), 'utf-8');
+
+      assert.equal(swift, 'swift content');
+      assert.equal(graphql, 'graphql content');
+      assert.equal(json, '{}');
+      assert.equal(txt, 'text content');
+    });
+
+    it('allows editing any file type without allowlist', async () => {
+      await fs.mkdir(path.join(root, 'queries'), { recursive: true });
+      await fs.writeFile(path.join(root, 'queries/GetProperty.graphql'), 'query { old_field }\n', 'utf-8');
+
+      const result = await ws.edit('queries/GetProperty.graphql', 'old_field', 'new_field');
+      assert.equal(result.succeeded, 1);
+      assert.equal(result.results[0].success, true);
+
+      const content = await fs.readFile(path.join(root, 'queries/GetProperty.graphql'), 'utf-8');
+      assert.ok(content.includes('new_field'));
+    });
+  });
+
   // --- escapeRegex ---
 
   describe('edit with special regex chars in literal mode', () => {
@@ -813,6 +867,105 @@ describe('LocalFilesystemWorkspace', () => {
 
       const content = await fs.readFile(path.join(root, 'src/backref.swift'), 'utf-8');
       assert.ok(content.includes('func myFunc(param: Int)'), `Got: ${content}`);
+    });
+  });
+
+  // --- run ---
+
+  describe('run', () => {
+    let ws: LocalFilesystemWorkspace;
+    let root: string;
+    let cleanup: () => Promise<void>;
+
+    before(async () => {
+      const temp = await createTempWorkspace();
+      ws = new LocalFilesystemWorkspace(temp.config);
+      root = temp.config.root;
+      cleanup = temp.cleanup;
+    });
+
+    after(async () => {
+      await cleanup();
+    });
+
+    it('runs a simple command and captures stdout', async () => {
+      const result = await ws.run('echo hello');
+      assert.equal(result.exitCode, 0);
+      assert.equal(result.stdout.trim(), 'hello');
+      assert.equal(result.truncated, false);
+    });
+
+    it('captures stderr from commands', async () => {
+      const result = await ws.run('echo error >&2');
+      assert.equal(result.exitCode, 0);
+      assert.equal(result.stderr.trim(), 'error');
+    });
+
+    it('returns non-zero exit code without throwing', async () => {
+      const result = await ws.run('exit 42');
+      assert.equal(result.exitCode, 42);
+      assert.equal(result.truncated, false);
+    });
+
+    it('supports piped commands', async () => {
+      const result = await ws.run('echo hello world | tr a-z A-Z');
+      assert.equal(result.exitCode, 0);
+      assert.equal(result.stdout.trim(), 'HELLO WORLD');
+    });
+
+    it('uses workspace root as cwd', async () => {
+      const result = await ws.run('pwd');
+      assert.equal(result.exitCode, 0);
+      // pwd resolves symlinks on macOS (/var → /private/var), so compare real paths
+      const actual = await fs.realpath(result.stdout.trim());
+      const expected = await fs.realpath(root);
+      assert.equal(actual, expected);
+    });
+
+    it('respects timeout', async () => {
+      const result = await ws.run('sleep 10', { timeout: 100 });
+      // Process should be killed, exit code non-zero
+      assert.notEqual(result.exitCode, 0);
+      assert.ok(result.stderr.includes('timeout') || result.exitCode !== 0);
+    });
+
+    it('reports truncated output when maxBuffer is exceeded', async () => {
+      // Generate output larger than 100 bytes
+      const result = await ws.run('yes "aaaaaaaaaa" | head -100', { maxBuffer: 100 });
+      assert.equal(result.truncated, true);
+    });
+
+    it('respects runAllowlist when configured', async () => {
+      // Create workspace with runAllowlist
+      const root = await fs.mkdtemp(path.join(os.tmpdir(), 'workspace-mcp-test-'));
+      const config: WorkspaceConfig = {
+        root,
+        name: 'restricted',
+        runAllowlist: ['echo', 'git'],
+      };
+      const restrictedWs = new LocalFilesystemWorkspace(config);
+
+      // Allowed command
+      const echoResult = await restrictedWs.run('echo hello');
+      assert.equal(echoResult.exitCode, 0);
+      assert.equal(echoResult.stdout.trim(), 'hello');
+
+      // Blocked command (not in allowlist)
+      const rmResult = await restrictedWs.run('rm /tmp/file');
+      assert.equal(rmResult.exitCode, 1);
+      assert.ok(rmResult.stderr.includes('not allowed'));
+      assert.ok(rmResult.stderr.includes('rm'));
+      assert.ok(rmResult.stderr.includes('echo'));
+
+      await fs.rm(root, { recursive: true, force: true });
+    });
+
+    it('allows all commands when runAllowlist is omitted', async () => {
+      // This workspace has no runAllowlist
+      // (created in the before() hook without runAllowlist)
+      const result = await ws.run('echo unrestricted');
+      assert.equal(result.exitCode, 0);
+      assert.equal(result.stdout.trim(), 'unrestricted');
     });
   });
 
