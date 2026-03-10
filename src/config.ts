@@ -7,7 +7,8 @@ import path from 'path';
 export interface WorkspaceConfig {
   root: string;
   name: string;
-  writeAllowlist: string[]; // Glob patterns
+  writeAllowlist?: string[]; // Glob patterns — omit to allow all writes within workspace root
+  runAllowlist?: string[]; // Command prefixes — omit to allow all commands
 }
 
 interface ExternalConfig {
@@ -43,8 +44,17 @@ function loadWorkspaces(): Record<string, WorkspaceConfig> {
     // Resolve root paths and validate required fields
     const resolved: Record<string, WorkspaceConfig> = {};
     for (const [key, config] of Object.entries(external.workspaces)) {
-      if (!config.root || !config.name || !Array.isArray(config.writeAllowlist)) {
-        console.error(`[MCP] Skipping workspace "${key}": missing required fields (root, name, writeAllowlist).`);
+      if (!config.root || !config.name) {
+        console.error(`[MCP] Skipping workspace "${key}": missing required fields (root, name).`);
+        continue;
+      }
+      // writeAllowlist and runAllowlist are optional — if provided, validate they're arrays
+      if (config.writeAllowlist !== undefined && !Array.isArray(config.writeAllowlist)) {
+        console.error(`[MCP] Skipping workspace "${key}": writeAllowlist must be an array of glob patterns.`);
+        continue;
+      }
+      if (config.runAllowlist !== undefined && !Array.isArray(config.runAllowlist)) {
+        console.error(`[MCP] Skipping workspace "${key}": runAllowlist must be an array of command prefixes.`);
         continue;
       }
       resolved[key] = {

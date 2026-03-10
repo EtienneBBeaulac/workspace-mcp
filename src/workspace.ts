@@ -36,6 +36,18 @@ export interface SearchOptions {
   offset?: number;
 }
 
+export interface RunOptions {
+  timeout?: number;    // ms, default 60_000
+  maxBuffer?: number;  // bytes, default 10MB
+}
+
+export interface RunResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+  truncated: boolean;
+}
+
 export interface Workspace {
   /** Read a file from the workspace. Returns line-numbered content with metadata (total lines, range). */
   read(relativePath: string, options?: ReadOptions): Promise<ReadResult>;
@@ -52,6 +64,8 @@ export interface Workspace {
   /** Search for pattern in workspace files using ripgrep. */
   search(pattern: string, options?: SearchOptions): Promise<SearchResult[]>;
 
+  /** Run a shell command in the workspace root directory. */
+  run(command: string, options?: RunOptions): Promise<RunResult>;
 }
 
 export interface FileEntry {

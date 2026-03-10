@@ -81,7 +81,7 @@ class WorkspaceMCPServer {
         },
         {
           name: 'write_crossproject',
-          description: 'Create or overwrite a file in a configured workspace root, typically another repo exposed through this MCP rather than the current project. Prefer built-in IDE editing/refactoring tools for current-workspace files. Only writes to paths matching the workspace write allowlist (defined in workspace-config.json), and logs all writes.',
+          description: 'Create or overwrite a file in a configured workspace root, typically another repo exposed through this MCP rather than the current project. Prefer built-in IDE editing/refactoring tools for current-workspace files. If a writeAllowlist is configured, only matching paths are writable. All writes are logged.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -104,7 +104,7 @@ class WorkspaceMCPServer {
         },
         {
           name: 'edit_crossproject',
-          description: 'Apply search-and-replace edits to one or more files in a configured workspace root, typically for companion repos outside the current project workspace. Prefer built-in IDE refactoring/editing tools for typed changes in the current workspace. The same find/replace runs on all specified files; oldString must be unique per file unless replaceAll is true. Respects the write allowlist, and when useRegex=true, newString supports regex backreferences ($1, $2, etc.).',
+          description: 'Apply search-and-replace edits to one or more files in a configured workspace root, typically for companion repos outside the current project workspace. Prefer built-in IDE refactoring/editing tools for typed changes in the current workspace. The same find/replace runs on all specified files; oldString must be unique per file unless replaceAll is true. If a writeAllowlist is configured, only matching paths are editable. When useRegex=true, newString supports regex backreferences ($1, $2, etc.).',
           inputSchema: {
             type: 'object',
             properties: {
@@ -219,6 +219,34 @@ class WorkspaceMCPServer {
               },
             },
             required: ['workspace', 'pattern'],
+          },
+        },
+
+        {
+          name: 'run_crossproject',
+          description: 'Run a shell command in a configured workspace root, typically a companion repo outside the current project workspace. Supports pipes, redirects, and chained commands. Returns stdout, stderr, and exit code. Use for build tools, codegen, git operations, or any command that needs to run in the workspace directory.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              workspace: {
+                type: 'string',
+                description: this.workspaceDescription(),
+                enum: Array.from(this.workspaces.keys()),
+              },
+              command: {
+                type: 'string',
+                description: 'Shell command to execute (e.g., "git status", "fastlane ios codegen", "npm test")',
+              },
+              timeout: {
+                type: 'number',
+                description: 'Timeout in milliseconds (default: 60000 = 60s)',
+              },
+              maxBuffer: {
+                type: 'number',
+                description: 'Maximum output buffer in bytes (default: 10MB). Output is truncated if exceeded.',
+              },
+            },
+            required: ['workspace', 'command'],
           },
         },
 
@@ -359,6 +387,29 @@ class WorkspaceMCPServer {
                     null,
                     2
                   ),
+                },
+              ],
+            };
+          }
+
+          case 'run_crossproject': {
+            const { workspace, command, ...runOptions } = z
+              .object({
+                workspace: z.string(),
+                command: z.string(),
+                timeout: z.number().optional(),
+                maxBuffer: z.number().optional(),
+              })
+              .parse(args);
+
+            const ws = this.getWorkspace(workspace);
+            const result = await ws.run(command, runOptions);
+
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2),
                 },
               ],
             };

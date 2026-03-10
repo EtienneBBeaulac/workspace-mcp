@@ -2,9 +2,9 @@
 
 import { promises as fs } from 'fs';
 import path from 'path';
-import { execFile } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
-import type { Workspace, FileEntry, SearchResult, BatchEditResult, ReadOptions, ReadResult, ListOptions, EditOptions, SearchOptions } from './workspace.js';
+import type { Workspace, FileEntry, SearchResult, BatchEditResult, ReadOptions, ReadResult, ListOptions, EditOptions, SearchOptions, RunOptions, RunResult } from './workspace.js';
 
 /** Internal-only type for single-file edit results (not part of the Workspace interface). */
 interface EditResult {
@@ -20,6 +20,7 @@ interface EditResult {
 }
 import type { WorkspaceConfig } from './config.js';
 
+const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 
 export class LocalFilesystemWorkspace implements Workspace {
@@ -71,9 +72,12 @@ export class LocalFilesystemWorkspace implements Workspace {
   async write(relativePath: string, content: string): Promise<void> {
     // Validate against allowlist
     if (!this.isPathAllowed(relativePath)) {
+      const ext = relativePath.split('.').pop() ?? '';
+      const patterns = this.config.writeAllowlist ?? [];
       throw new Error(
-        `Write not allowed: ${relativePath} does not match any allowlist pattern. ` +
-        `Allowed patterns: ${this.config.writeAllowlist.join(', ')}`
+        `Write not allowed: "${relativePath}" does not match any writeAllowlist pattern.\n` +
+        `Allowed patterns: ${patterns.join(', ')}\n` +
+        `To allow .${ext} files, add a pattern like "Modules/**/*.${ext}" to writeAllowlist in workspace-config.json, or remove writeAllowlist entirely to allow all writes.`
       );
     }
 
@@ -153,10 +157,13 @@ export class LocalFilesystemWorkspace implements Workspace {
   ): Promise<EditResult> {
     // Validate against allowlist
     if (!this.isPathAllowed(relativePath)) {
+      const ext = relativePath.split('.').pop() ?? '';
+      const patterns = this.config.writeAllowlist ?? [];
       return {
         success: false,
-        error: `Edit not allowed: ${relativePath} does not match any allowlist pattern. ` +
-          `Allowed patterns: ${this.config.writeAllowlist.join(', ')}`,
+        error: `Edit not allowed: "${relativePath}" does not match any writeAllowlist pattern.\n` +
+          `Allowed patterns: ${patterns.join(', ')}\n` +
+          `To allow .${ext} files, add a pattern like "Modules/**/*.${ext}" to writeAllowlist in workspace-config.json, or remove writeAllowlist entirely to allow all writes.`,
       };
     }
 
@@ -462,6 +469,74 @@ export class LocalFilesystemWorkspace implements Workspace {
     );
   }
 
+  private static readonly DEFAULT_TIMEOUT = 60_000;
+  private static readonly DEFAULT_MAX_BUFFER = 10 * 1024 * 1024;
+
+  async run(command: string, options?: RunOptions): Promise<RunResult> {
+    // Check runAllowlist if configured
+    if (this.config.runAllowlist) {
+      const commandPrefix = command.split(/\s+/)[0]; // First word before whitespace
+      const allowed = this.config.runAllowlist.some(prefix => commandPrefix === prefix);
+      if (!allowed) {
+        const errorMsg = `Command not allowed: "${commandPrefix}" does not match any runAllowlist prefix.\n` +
+          `Allowed prefixes: ${this.config.runAllowlist.join(', ')}\n` +
+          `To allow this command, add "${commandPrefix}" to runAllowlist in workspace-config.json.`;
+        return {
+          stdout: '',
+          stderr: errorMsg,
+          exitCode: 1,
+          truncated: false,
+        };
+      }
+    }
+
+    const timeout = options?.timeout ?? LocalFilesystemWorkspace.DEFAULT_TIMEOUT;
+    const maxBuffer = options?.maxBuffer ?? LocalFilesystemWorkspace.DEFAULT_MAX_BUFFER;
+
+    // Truncate long commands in logs to keep stderr readable
+    const logCmd = command.length > 200 ? command.substring(0, 200) + '...' : command;
+    console.error(`[MCP] Run in ${this.config.name}: ${logCmd}`);
+
+    try {
+      const { stdout, stderr } = await execAsync(command, {
+        cwd: this.config.root,
+        timeout,
+        maxBuffer,
+      });
+
+      return { stdout, stderr, exitCode: 0, truncated: false };
+    } catch (error: any) {
+      // Node attaches stdout/stderr/code even on non-zero exit or timeout.
+      // Distinguish infrastructure errors from normal non-zero exits.
+      const stdout: string = error.stdout ?? '';
+      const stderr: string = error.stderr ?? '';
+
+      // maxBuffer exceeded — partial output is still available
+      if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
+        return { stdout, stderr, exitCode: error.status ?? 1, truncated: true };
+      }
+
+      // Timeout — process was killed
+      if (error.killed) {
+        return {
+          stdout,
+          stderr: stderr + `\n[MCP] Process killed after ${timeout}ms timeout`,
+          exitCode: error.status ?? 143, // SIGTERM default
+          truncated: false,
+        };
+      }
+
+      // Non-zero exit code — normal result, not an error
+      if (typeof error.code === 'number') {
+        return { stdout, stderr, exitCode: error.code, truncated: false };
+      }
+
+      // Unexpected failure (e.g., command not found, spawn error)
+      const msg = error.message ?? String(error);
+      throw new Error(`Command failed: ${msg}`);
+    }
+  }
+
   private resolvePath(relativePath: string): string {
     // Normalize common "root" inputs that agents naturally try.
     // "/", "", and "." all mean "workspace root". Without this, "/" resolves
@@ -490,8 +565,12 @@ export class LocalFilesystemWorkspace implements Workspace {
   }
 
   private isPathAllowed(relativePath: string): boolean {
+    // No allowlist configured — all paths within the workspace root are writable.
+    // The path traversal check in resolvePath is the real security boundary.
+    if (!this.config.writeAllowlist) {
+      return true;
+    }
     // Use Node's native path.matchesGlob for reliable, battle-tested glob matching.
-    // This is a security boundary (write allowlist), so we avoid hand-rolled implementations.
     return this.config.writeAllowlist.some(
       (pattern) => path.matchesGlob(relativePath, pattern)
     );
